@@ -1097,6 +1097,10 @@ export default function ModdableArenaSimulator() {
     });
   };
 
+  const controlInputClass = "w-full bg-[#020f2c] border border-sky-900/70 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/60 focus:border-fuchsia-400/70";
+  const controlSelectClass = "w-full bg-[#020f2c] border border-sky-900/70 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/60 focus:border-fuchsia-400/70";
+  const fieldLabelClass = "text-[12px] uppercase tracking-wide text-sky-200/85 mb-1";
+
   const handleArenaPick = (evt: React.MouseEvent<SVGSVGElement>) => {
     if (!pickerMode) return;
     const svg = evt.currentTarget;
@@ -1256,10 +1260,10 @@ export default function ModdableArenaSimulator() {
           )}
 
           {tab === "units" && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
                 <button
-                  className="px-3 py-2 rounded bg-emerald-700"
+                  className="px-4 py-2 rounded-full bg-violet-600 hover:bg-violet-500 font-semibold"
                   onClick={() => {
                     const id = `unit_${Date.now()}`;
                     setDraftConfig((c) => ({
@@ -1271,68 +1275,85 @@ export default function ModdableArenaSimulator() {
                 >
                   Add Unit Template
                 </button>
-                <button className="px-3 py-2 rounded bg-indigo-700" onClick={() => setStorageOpen(true)}>
+                <button className="px-4 py-2 rounded-full bg-indigo-700 hover:bg-indigo-600 font-semibold" onClick={() => setStorageOpen(true)}>
                   Open Storage ({storedDeployments.length})
                 </button>
               </div>
 
-              {draftConfig.unitTypes.map((u, idx) => {
-                const deploy = draftConfig.units.find((d) => d.unitTypeId === u.id);
-                return (
-                  <div key={u.id} className="bg-slate-800 rounded-xl p-3">
-                    <div className="flex justify-between items-center mb-2">
-                      <div className="font-semibold">{u.id}</div>
-                      <button className="px-2 py-1 rounded bg-rose-700" onClick={() => setDraftConfig((c) => ({ ...c, unitTypes: c.unitTypes.filter((x) => x.id !== u.id), units: c.units.filter((d) => d.unitTypeId !== u.id) }))}>Remove Unit Template</button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <label className="text-sm"><div>name</div><input className="w-full bg-slate-700 rounded px-2 py-1" value={u.name} onChange={(e) => updateUnitTypeField(idx, "name", e.target.value)} /></label>
-                      <label className="text-sm"><div>color</div><input className="w-full bg-slate-700 rounded px-2 py-1" value={u.color} onChange={(e) => updateUnitTypeField(idx, "color", e.target.value)} /></label>
-                      <label className="text-sm"><div>picker</div><input className="w-full h-9 bg-slate-700 rounded px-1 py-1" type="color" value={u.color} onChange={(e) => updateUnitTypeField(idx, "color", e.target.value)} /></label>
-                      <label className="text-sm"><div>team</div><input className="w-full bg-slate-700 rounded px-2 py-1" value={deploy?.team || ""} onChange={(e) => updateDeploymentField(u.id, "team", e.target.value)} /></label>
-                      <button className="text-sm px-2 py-1 rounded bg-slate-700 self-end" onClick={() => setPickerMode({ type: "unit", id: u.id })}>Pick unit position on map</button>
-                      <button className="text-sm px-2 py-1 rounded bg-slate-700 self-end" onClick={() => updateDeploymentField(u.id, "active", !(deploy?.active !== false))}>{deploy?.active !== false ? "Send to Storage" : "Deploy to Arena"}</button>
-                      {([
-                        ["count", deploy?.count ?? 0, (v: number) => updateDeploymentField(u.id, "count", v)],
-                        ["HP", u.maxHp, (v: number) => updateUnitTypeField(idx, "maxHp", v)],
-                        ["speed", u.moveSpeed, (v: number) => updateUnitTypeField(idx, "moveSpeed", v)],
-                        ["attack", u.attackDamage, (v: number) => updateUnitTypeField(idx, "attackDamage", v)],
-                        ["range", u.attackRange, (v: number) => updateUnitTypeField(idx, "attackRange", v)],
-                        ["cooldown", u.attackCooldown, (v: number) => updateUnitTypeField(idx, "attackCooldown", v)],
-                        ["defense", u.defense, (v: number) => updateUnitTypeField(idx, "defense", v)],
-                        ["radius", u.radius, (v: number) => updateUnitTypeField(idx, "radius", v)],
-                        ["spread", deploy?.spread ?? 0, (v: number) => updateDeploymentField(u.id, "spread", v)],
-                        ["pos X", deploy?.x ?? 0, (v: number) => updateDeploymentField(u.id, "x", v)],
-                        ["pos Y", deploy?.y ?? 0, (v: number) => updateDeploymentField(u.id, "y", v)],
-                        ["knockback", u.knockback, (v: number) => updateUnitTypeField(idx, "knockback", v)],
-                        ["preferred", u.ai.preferredDistance, (v: number) => updateUnitAIField(idx, "preferredDistance", v)],
-                        ["aggro", u.aggroRange, (v: number) => updateUnitTypeField(idx, "aggroRange", v)],
-                        ["bravery", u.ai.bravery, (v: number) => updateUnitAIField(idx, "bravery", v)],
-                      ] as const).map(([label, value, setter]) => (
-                        <label key={label} className="text-sm"><div>{label}</div><input className="w-full bg-slate-700 rounded px-2 py-1" type="number" value={value} onChange={(e) => setter(Number(e.target.value) || 0)} /></label>
-                      ))}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {draftConfig.unitTypes.map((u, idx) => {
+                  const deploy = draftConfig.units.find((d) => d.unitTypeId === u.id);
+                  return (
+                    <div key={u.id} className="bg-[#011133] border border-sky-900/55 rounded-3xl p-4 shadow-inner shadow-black/25">
+                      <div className="flex justify-between items-center mb-3 gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="h-8 w-8 rounded-md border border-slate-400/30 shrink-0" style={{ backgroundColor: u.color }} />
+                          <div className="truncate font-semibold text-slate-100">{u.name}</div>
+                          <div className="truncate text-sm text-slate-400">{deploy?.team || "Team"}</div>
+                        </div>
+                        <button className="px-3 py-1.5 rounded-full bg-rose-600 hover:bg-rose-500 text-sm font-semibold" onClick={() => setDraftConfig((c) => ({ ...c, unitTypes: c.unitTypes.filter((x) => x.id !== u.id), units: c.units.filter((d) => d.unitTypeId !== u.id) }))}>Remove</button>
+                      </div>
 
-                      <label className="text-sm"><div>Attack type</div><select className="w-full bg-slate-700 rounded px-2 py-1" value={u.attackType} onChange={(e) => updateUnitTypeField(idx, "attackType", e.target.value as UnitType["attackType"])}><option value="normal">normal</option><option value="punch">punch</option></select></label>
-                      <label className="text-sm"><div>Punch multiplier</div><input className="w-full bg-slate-700 rounded px-2 py-1" type="number" value={u.punchMultiplier} onChange={(e) => updateUnitTypeField(idx, "punchMultiplier", Number(e.target.value) || 0)} /></label>
-                      <label className="text-sm"><div>AI behavior</div><select className="w-full bg-slate-700 rounded px-2 py-1" value={u.ai.behavior} onChange={(e) => updateUnitAIField(idx, "behavior", e.target.value as AIBehavior)}><option value="aggressive">aggressive</option><option value="kite">kite</option><option value="opportunist">opportunist</option></select></label>
-                      <label className="text-sm"><div>focusLowestHp</div><input type="checkbox" checked={u.ai.focusLowestHp} onChange={(e) => updateUnitAIField(idx, "focusLowestHp", e.target.checked)} /></label>
-                      <label className="text-sm"><div>avoidStrongerEnemies</div><input type="checkbox" checked={u.ai.avoidStrongerEnemies} onChange={(e) => updateUnitAIField(idx, "avoidStrongerEnemies", e.target.checked)} /></label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label className="text-sm"><div className={fieldLabelClass}>Name</div><input className={controlInputClass} value={u.name} onChange={(e) => updateUnitTypeField(idx, "name", e.target.value)} /></label>
+                        <label className="text-sm"><div className={fieldLabelClass}>Team</div><input className={controlInputClass} value={deploy?.team || ""} onChange={(e) => updateDeploymentField(u.id, "team", e.target.value)} /></label>
+                        <label className="text-sm"><div className={fieldLabelClass}>Color</div><input className={controlInputClass} value={u.color} onChange={(e) => updateUnitTypeField(idx, "color", e.target.value)} /></label>
+                        <label className="text-sm"><div className={fieldLabelClass}>Color Picker</div><input className="w-full h-11 bg-[#020f2c] border border-sky-900/70 rounded-xl px-1.5 py-1.5" type="color" value={u.color} onChange={(e) => updateUnitTypeField(idx, "color", e.target.value)} /></label>
+                        <button className="text-sm px-3 py-2 rounded-xl bg-slate-800 border border-slate-600 hover:bg-slate-700" onClick={() => setPickerMode({ type: "unit", id: u.id })}>Pick unit position on map</button>
+                        <button className="text-sm px-3 py-2 rounded-xl bg-slate-800 border border-slate-600 hover:bg-slate-700" onClick={() => updateDeploymentField(u.id, "active", !(deploy?.active !== false))}>{deploy?.active !== false ? "Send to Storage" : "Deploy to Arena"}</button>
 
-                      <label className="text-sm col-span-2"><div>Projectile enable</div><input type="checkbox" checked={!!u.projectile} onChange={(e) => updateUnitTypeField(idx, "projectile", e.target.checked ? { type: "normal", speed: 220, radius: 4, life: 2, color: u.color, homing: 0, pierceCount: 1, explosionRadius: 70 } : null)} /></label>
-                      {u.projectile && (
-                        <>
-                          <label className="text-sm"><div>projectile type</div><select className="w-full bg-slate-700 rounded px-2 py-1" value={u.projectile.type} onChange={(e) => updateProjectileField(idx, "type", e.target.value as ProjectileConfig["type"])}><option value="normal">normal</option><option value="pierce">pierce</option><option value="explosive">explosive</option></select></label>
-                          <label className="text-sm"><div>projectile speed</div><input className="w-full bg-slate-700 rounded px-2 py-1" type="number" value={u.projectile.speed} onChange={(e) => updateProjectileField(idx, "speed", Number(e.target.value) || 0)} /></label>
-                          <label className="text-sm"><div>projectile radius</div><input className="w-full bg-slate-700 rounded px-2 py-1" type="number" value={u.projectile.radius} onChange={(e) => updateProjectileField(idx, "radius", Number(e.target.value) || 0)} /></label>
-                          <label className="text-sm"><div>projectile life</div><input className="w-full bg-slate-700 rounded px-2 py-1" type="number" value={u.projectile.life} onChange={(e) => updateProjectileField(idx, "life", Number(e.target.value) || 0)} /></label>
-                          <label className="text-sm"><div>projectile homing</div><input className="w-full bg-slate-700 rounded px-2 py-1" type="number" value={u.projectile.homing} onChange={(e) => updateProjectileField(idx, "homing", Number(e.target.value) || 0)} /></label>
-                          <label className="text-sm"><div>pierce count</div><input className="w-full bg-slate-700 rounded px-2 py-1" type="number" value={u.projectile.pierceCount} onChange={(e) => updateProjectileField(idx, "pierceCount", Number(e.target.value) || 0)} /></label>
-                          <label className="text-sm"><div>explosion radius</div><input className="w-full bg-slate-700 rounded px-2 py-1" type="number" value={u.projectile.explosionRadius} onChange={(e) => updateProjectileField(idx, "explosionRadius", Number(e.target.value) || 0)} /></label>
-                        </>
-                      )}
+                        {([
+                          ["count", deploy?.count ?? 0, (v: number) => updateDeploymentField(u.id, "count", v)],
+                          ["HP", u.maxHp, (v: number) => updateUnitTypeField(idx, "maxHp", v)],
+                          ["speed", u.moveSpeed, (v: number) => updateUnitTypeField(idx, "moveSpeed", v)],
+                          ["attack", u.attackDamage, (v: number) => updateUnitTypeField(idx, "attackDamage", v)],
+                          ["range", u.attackRange, (v: number) => updateUnitTypeField(idx, "attackRange", v)],
+                          ["cooldown", u.attackCooldown, (v: number) => updateUnitTypeField(idx, "attackCooldown", v)],
+                          ["defense", u.defense, (v: number) => updateUnitTypeField(idx, "defense", v)],
+                          ["radius", u.radius, (v: number) => updateUnitTypeField(idx, "radius", v)],
+                          ["spread", deploy?.spread ?? 0, (v: number) => updateDeploymentField(u.id, "spread", v)],
+                          ["pos X", deploy?.x ?? 0, (v: number) => updateDeploymentField(u.id, "x", v)],
+                          ["pos Y", deploy?.y ?? 0, (v: number) => updateDeploymentField(u.id, "y", v)],
+                          ["knockback", u.knockback, (v: number) => updateUnitTypeField(idx, "knockback", v)],
+                          ["preferred", u.ai.preferredDistance, (v: number) => updateUnitAIField(idx, "preferredDistance", v)],
+                          ["aggro", u.aggroRange, (v: number) => updateUnitTypeField(idx, "aggroRange", v)],
+                          ["bravery", u.ai.bravery, (v: number) => updateUnitAIField(idx, "bravery", v)],
+                        ] as const).map(([label, value, setter]) => (
+                          <label key={label} className="text-sm"><div className={fieldLabelClass}>{label}</div><input className={controlInputClass} type="number" value={value} onChange={(e) => setter(Number(e.target.value) || 0)} /></label>
+                        ))}
+
+                        <label className="text-sm"><div className={fieldLabelClass}>Attack Type</div><select className={controlSelectClass} value={u.attackType} onChange={(e) => updateUnitTypeField(idx, "attackType", e.target.value as UnitType["attackType"])}><option value="normal">normal</option><option value="punch">punch</option></select></label>
+                        <label className="text-sm"><div className={fieldLabelClass}>Punch Multiplier</div><input className={controlInputClass} type="number" value={u.punchMultiplier} onChange={(e) => updateUnitTypeField(idx, "punchMultiplier", Number(e.target.value) || 0)} /></label>
+                        <label className="text-sm"><div className={fieldLabelClass}>AI Behavior</div><select className={controlSelectClass} value={u.ai.behavior} onChange={(e) => updateUnitAIField(idx, "behavior", e.target.value as AIBehavior)}><option value="aggressive">aggressive</option><option value="kite">kite</option><option value="opportunist">opportunist</option></select></label>
+                        <label className="text-sm flex items-center gap-2 rounded-xl border border-sky-900/60 bg-[#020f2c] px-3 py-2 mt-6"><input type="checkbox" checked={u.ai.focusLowestHp} onChange={(e) => updateUnitAIField(idx, "focusLowestHp", e.target.checked)} /><span>focusLowestHp</span></label>
+                        <label className="text-sm flex items-center gap-2 rounded-xl border border-sky-900/60 bg-[#020f2c] px-3 py-2 mt-6"><input type="checkbox" checked={u.ai.avoidStrongerEnemies} onChange={(e) => updateUnitAIField(idx, "avoidStrongerEnemies", e.target.checked)} /><span>avoidStrongerEnemies</span></label>
+
+                        <div className="md:col-span-2 rounded-2xl border border-sky-900/60 bg-[#000a24] p-3 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-semibold text-sky-100">Projectile</div>
+                            <label className="text-sm flex items-center gap-2">
+                              <input type="checkbox" checked={!!u.projectile} onChange={(e) => updateUnitTypeField(idx, "projectile", e.target.checked ? { type: "normal", speed: 220, radius: 4, life: 2, color: u.color, homing: 0, pierceCount: 1, explosionRadius: 70 } : null)} />
+                              Enable projectile
+                            </label>
+                          </div>
+                          {u.projectile && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <label className="text-sm"><div className={fieldLabelClass}>Projectile Type</div><select className={controlSelectClass} value={u.projectile.type} onChange={(e) => updateProjectileField(idx, "type", e.target.value as ProjectileConfig["type"])}><option value="normal">normal</option><option value="pierce">pierce</option><option value="explosive">explosive</option></select></label>
+                              <label className="text-sm"><div className={fieldLabelClass}>Projectile Speed</div><input className={controlInputClass} type="number" value={u.projectile.speed} onChange={(e) => updateProjectileField(idx, "speed", Number(e.target.value) || 0)} /></label>
+                              <label className="text-sm"><div className={fieldLabelClass}>Projectile Radius</div><input className={controlInputClass} type="number" value={u.projectile.radius} onChange={(e) => updateProjectileField(idx, "radius", Number(e.target.value) || 0)} /></label>
+                              <label className="text-sm"><div className={fieldLabelClass}>Projectile Life</div><input className={controlInputClass} type="number" value={u.projectile.life} onChange={(e) => updateProjectileField(idx, "life", Number(e.target.value) || 0)} /></label>
+                              <label className="text-sm"><div className={fieldLabelClass}>Projectile Homing</div><input className={controlInputClass} type="number" value={u.projectile.homing} onChange={(e) => updateProjectileField(idx, "homing", Number(e.target.value) || 0)} /></label>
+                              <label className="text-sm"><div className={fieldLabelClass}>Pierce Count</div><input className={controlInputClass} type="number" value={u.projectile.pierceCount} onChange={(e) => updateProjectileField(idx, "pierceCount", Number(e.target.value) || 0)} /></label>
+                              <label className="text-sm"><div className={fieldLabelClass}>Explosion Radius</div><input className={controlInputClass} type="number" value={u.projectile.explosionRadius} onChange={(e) => updateProjectileField(idx, "explosionRadius", Number(e.target.value) || 0)} /></label>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="pt-3 mt-3 border-t border-sky-900/40 text-xs text-slate-400">slot: {idx + 1} • typeId: {u.id}</div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
