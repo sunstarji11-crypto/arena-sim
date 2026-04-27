@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 type AIBehavior = "aggressive" | "kite" | "opportunist";
 type MapElementType = "wall" | "slowZone" | "boostZone" | "damageZone" | "healZone";
@@ -65,6 +65,7 @@ interface UnitDeployment {
   y: number;
   count: number;
   spread: number;
+  active: boolean;
 }
 
 interface MapElement {
@@ -293,10 +294,10 @@ const DEFAULT_CONFIG: SimulatorConfig = {
     },
   ],
   units: [
-    { id: "deploy_red", unitTypeId: "red_fighter", team: "Red", x: 180, y: 170, count: 4, spread: 40 },
-    { id: "deploy_blue", unitTypeId: "blue_archer", team: "Blue", x: 1220, y: 170, count: 4, spread: 40 },
-    { id: "deploy_green", unitTypeId: "green_tank", team: "Green", x: 180, y: 720, count: 2, spread: 28 },
-    { id: "deploy_yellow", unitTypeId: "yellow_rogue", team: "Yellow", x: 1220, y: 720, count: 5, spread: 36 },
+    { id: "deploy_red", unitTypeId: "red_fighter", team: "Red", x: 180, y: 170, count: 4, spread: 40, active: true },
+    { id: "deploy_blue", unitTypeId: "blue_archer", team: "Blue", x: 1220, y: 170, count: 4, spread: 40, active: true },
+    { id: "deploy_green", unitTypeId: "green_tank", team: "Green", x: 180, y: 720, count: 2, spread: 28, active: true },
+    { id: "deploy_yellow", unitTypeId: "yellow_rogue", team: "Yellow", x: 1220, y: 720, count: 5, spread: 36, active: true },
   ],
   mapElements: [
     { id: "wall_1", type: "wall", x: 650, y: 270, width: 110, height: 280, intensity: 1, color: "#64748b" },
@@ -366,6 +367,7 @@ function sanitizeConfig(config: SimulatorConfig): SimulatorConfig {
       y: Number(d.y) || 0,
       count: clamp(Math.floor(Number(d.count) || 1), 0, 300),
       spread: clamp(Number(d.spread) || 20, 0, 1000),
+      active: d.active !== false,
     })),
     mapElements: config.mapElements.map((m, i) => ({
       ...m,
@@ -385,6 +387,7 @@ function expandUnits(config: SimulatorConfig): RuntimeUnit[] {
   const unitTypeMap = new Map(config.unitTypes.map((u) => [u.id, u]));
   const out: RuntimeUnit[] = [];
   config.units.forEach((deployment) => {
+    if (!deployment.active) return;
     const t = unitTypeMap.get(deployment.unitTypeId);
     if (!t) return;
     for (let i = 0; i < deployment.count; i += 1) {
@@ -896,12 +899,125 @@ function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj)) as T;
 }
 
+const IP_STORAGE_INDEX_KEY = "arena-sim-ip-index";
+const IP_STORAGE_CONFIGS_KEY = "arena-sim-configs";
+const LOCAL_FALLBACK_CONFIG_KEY = "arena-sim-config-local";
+const MAX_IP_HISTORY = 20;
+
+interface IpStorageIndex {
+  lastIp: string | null;
+  recentIps: string[];
+  updatedAt: string;
+}
+
+const defaultIpStorageIndex = (): IpStorageIndex => ({
+  lastIp: null,
+  recentIps: [],
+  updatedAt: new Date().toISOString(),
+});
+
+function safeJsonParse<T>(raw: string | null, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function readIpStorageIndex(): IpStorageIndex {
+  const parsed = safeJsonParse<IpStorageIndex>(localStorage.getItem(IP_STORAGE_INDEX_KEY), defaultIpStorageIndex());
+  if (!Array.isArray(parsed.recentIps)) return defaultIpStorageIndex();
+  return {
+    lastIp: typeof parsed.lastIp === "string" ? parsed.lastIp : null,
+    recentIps: parsed.recentIps.filter((ip) => typeof ip === "string"),
+    updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : new Date().toISOString(),
+  };
+}
+
+function writeIpStorageIndex(index: IpStorageIndex) {
+  localStorage.setItem(IP_STORAGE_INDEX_KEY, JSON.stringify(index));
+}
+
+function readIpConfigMap(): Record<string, SimulatorConfig> {
+  const parsed = safeJsonParse<Record<string, SimulatorConfig>>(localStorage.getItem(IP_STORAGE_CONFIGS_KEY), {});
+  if (!parsed || typeof parsed !== "object") return {};
+  return parsed;
+}
+
+function writeIpConfigMap(map: Record<string, SimulatorConfig>) {
+  localStorage.setItem(IP_STORAGE_CONFIGS_KEY, JSON.stringify(map));
+}
+
 export default function ModdableArenaSimulator() {
   const [draftConfig, setDraftConfig] = useState<SimulatorConfig>(() => deepClone(DEFAULT_CONFIG));
   const [simState, setSimState] = useState<SimulationState>(() => buildInitialState(deepClone(DEFAULT_CONFIG)));
   const [tab, setTab] = useState<"units" | "arena" | "map">("units");
+  const [storageOpen, setStorageOpen] = useState(false);
+  const [pickerMode, setPickerMode] = useState<{ type: "unit" | "map"; id: string } | null>(null);
+  const [resolvedIp, setResolvedIp] = useState<string | null>(null);
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    let alive = true;
+    const bootstrap = async () => {
+      let ip: string | null = null;
+      try {
+        const resp = await fetch("https://api.ipify.org?format=json");
+        const data = await resp.json();
+        if (typeof data?.ip === "string" && data.ip) ip = data.ip;
+      } catch {
+        // fallback to local key when IP lookup is blocked/unavailable
+      }
+      if (!alive) return;
+      setResolvedIp(ip);
+      let saved: SimulatorConfig | null = null;
+
+      if (ip) {
+        const configs = readIpConfigMap();
+        saved = configs[ip] ? sanitizeConfig(configs[ip]) : null;
+        const prev = readIpStorageIndex();
+        const recentIps = [ip, ...prev.recentIps.filter((v) => v !== ip)].slice(0, MAX_IP_HISTORY);
+        writeIpStorageIndex({ lastIp: ip, recentIps, updatedAt: new Date().toISOString() });
+      } else {
+        const localSaved = localStorage.getItem(LOCAL_FALLBACK_CONFIG_KEY);
+        if (localSaved) {
+          try {
+            saved = sanitizeConfig(JSON.parse(localSaved) as SimulatorConfig);
+          } catch {
+            saved = null;
+          }
+        }
+      }
+
+      if (saved) {
+        try {
+          setDraftConfig(saved);
+          setSimState(buildInitialState(saved));
+        } catch {
+          // ignore invalid persisted payloads
+        }
+      }
+    };
+    bootstrap();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (resolvedIp) {
+      const map = readIpConfigMap();
+      map[resolvedIp] = draftConfig;
+      writeIpConfigMap(map);
+      const prev = readIpStorageIndex();
+      const recentIps = [resolvedIp, ...prev.recentIps.filter((v) => v !== resolvedIp)].slice(0, MAX_IP_HISTORY);
+      writeIpStorageIndex({ lastIp: resolvedIp, recentIps, updatedAt: new Date().toISOString() });
+      return;
+    }
+    localStorage.setItem(LOCAL_FALLBACK_CONFIG_KEY, JSON.stringify(draftConfig));
+  }, [draftConfig, resolvedIp]);
 
   useEffect(() => {
     const tick = (t: number) => {
@@ -929,6 +1045,8 @@ export default function ModdableArenaSimulator() {
     });
     return Array.from(map.entries());
   }, [simState.runtimeUnits]);
+
+  const storedDeployments = useMemo(() => draftConfig.units.filter((u) => !u.active), [draftConfig.units]);
 
   const applyConfig = () => {
     const clean = sanitizeConfig(deepClone(draftConfig));
@@ -974,9 +1092,28 @@ export default function ModdableArenaSimulator() {
       const units = [...c.units];
       const idx = units.findIndex((u) => u.unitTypeId === unitTypeId);
       if (idx >= 0) units[idx] = { ...units[idx], [key]: value };
-      else units.push({ id: `deploy_${unitTypeId}`, unitTypeId, team: "Team", x: 100, y: 100, count: 1, spread: 20, [key]: value });
+      else units.push({ id: `deploy_${unitTypeId}`, unitTypeId, team: "Team", x: 100, y: 100, count: 1, spread: 20, active: true, [key]: value });
       return { ...c, units };
     });
+  };
+
+  const handleArenaPick = (evt: React.MouseEvent<SVGSVGElement>) => {
+    if (!pickerMode) return;
+    const svg = evt.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const x = ((evt.clientX - rect.left) / rect.width) * simState.config.arena.width;
+    const y = ((evt.clientY - rect.top) / rect.height) * simState.config.arena.height;
+
+    if (pickerMode.type === "unit") {
+      updateDeploymentField(pickerMode.id, "x", x);
+      updateDeploymentField(pickerMode.id, "y", y);
+    } else {
+      setDraftConfig((c) => {
+        const mapElements = c.mapElements.map((m) => (m.id === pickerMode.id ? { ...m, x, y } : m));
+        return { ...c, mapElements };
+      });
+    }
+    setPickerMode(null);
   };
 
   return (
@@ -995,7 +1132,13 @@ export default function ModdableArenaSimulator() {
 
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 overflow-auto max-h-[70vh]">
-            <svg width={simState.config.arena.width} height={simState.config.arena.height} className="rounded-lg" style={{ background: simState.config.arena.background }}>
+            <svg
+              width={simState.config.arena.width}
+              height={simState.config.arena.height}
+              className="rounded-lg"
+              style={{ background: simState.config.arena.background, cursor: pickerMode ? "crosshair" : "default" }}
+              onClick={handleArenaPick}
+            >
               {simState.config.mapElements.map((m) => (
                 <rect key={m.id} x={m.x} y={m.y} width={m.width} height={m.height} fill={m.color} opacity={m.type === "wall" ? 0.8 : 0.3} stroke={m.type === "wall" ? "#cbd5e1" : m.color} strokeWidth={1.2} />
               ))}
@@ -1037,6 +1180,7 @@ export default function ModdableArenaSimulator() {
               <text x={16} y={28} fill="#e2e8f0" fontSize={18}>Time: {simState.time.toFixed(1)}s</text>
               <text x={16} y={52} fill="#e2e8f0" fontSize={16}>Status: {simState.running ? (simState.paused ? "Paused" : "Running") : "Stopped"}</text>
               <text x={16} y={74} fill="#fbbf24" fontSize={16}>{simState.winner ? `Winner: ${simState.winner}` : "Winner: TBD"}</text>
+              {pickerMode && <text x={16} y={96} fill="#a5f3fc" fontSize={14}>Pick mode: click arena to set coordinates</text>}
             </svg>
           </div>
 
@@ -1104,6 +1248,7 @@ export default function ModdableArenaSimulator() {
                   {(["x", "y", "width", "height", "intensity"] as const).map((k) => (
                     <label key={k} className="text-sm"><div>{k}</div><input className="w-full bg-slate-700 rounded px-2 py-1" type="number" value={m[k]} onChange={(e) => setDraftConfig((c) => { const mapElements = [...c.mapElements]; mapElements[idx] = { ...mapElements[idx], [k]: Number(e.target.value) || 0 }; return { ...c, mapElements }; })} /></label>
                   ))}
+                  <button className="px-3 py-1.5 rounded bg-slate-700" onClick={() => setPickerMode({ type: "map", id: m.id })}>Pick on map</button>
                   <button className="px-3 py-1.5 rounded bg-rose-700" onClick={() => setDraftConfig((c) => ({ ...c, mapElements: c.mapElements.filter((_, i) => i !== idx) }))}>Remove</button>
                 </div>
               ))}
@@ -1112,19 +1257,24 @@ export default function ModdableArenaSimulator() {
 
           {tab === "units" && (
             <div className="space-y-3">
-              <button
-                className="px-3 py-2 rounded bg-emerald-700"
-                onClick={() => {
-                  const id = `unit_${Date.now()}`;
-                  setDraftConfig((c) => ({
-                    ...c,
-                    unitTypes: [...c.unitTypes, { id, name: "New Unit", color: "#f8fafc", radius: 12, maxHp: 100, moveSpeed: 90, attackDamage: 10, attackRange: 30, attackCooldown: 0.8, aggroRange: 300, knockback: 80, contactDamage: 0, defense: 0, attackType: "normal", punchMultiplier: 1.7, projectile: null, ai: { behavior: "aggressive", preferredDistance: 20, focusLowestHp: false, avoidStrongerEnemies: false, bravery: 1 } }],
-                    units: [...c.units, { id: `deploy_${id}`, unitTypeId: id, team: "New", x: 200, y: 200, count: 2, spread: 20 }],
-                  }));
-                }}
-              >
-                Add Unit Template
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="px-3 py-2 rounded bg-emerald-700"
+                  onClick={() => {
+                    const id = `unit_${Date.now()}`;
+                    setDraftConfig((c) => ({
+                      ...c,
+                      unitTypes: [...c.unitTypes, { id, name: "New Unit", color: "#f8fafc", radius: 12, maxHp: 100, moveSpeed: 90, attackDamage: 10, attackRange: 30, attackCooldown: 0.8, aggroRange: 300, knockback: 80, contactDamage: 0, defense: 0, attackType: "normal", punchMultiplier: 1.7, projectile: null, ai: { behavior: "aggressive", preferredDistance: 20, focusLowestHp: false, avoidStrongerEnemies: false, bravery: 1 } }],
+                      units: [...c.units, { id: `deploy_${id}`, unitTypeId: id, team: "New", x: 200, y: 200, count: 2, spread: 20, active: true }],
+                    }));
+                  }}
+                >
+                  Add Unit Template
+                </button>
+                <button className="px-3 py-2 rounded bg-indigo-700" onClick={() => setStorageOpen(true)}>
+                  Open Storage ({storedDeployments.length})
+                </button>
+              </div>
 
               {draftConfig.unitTypes.map((u, idx) => {
                 const deploy = draftConfig.units.find((d) => d.unitTypeId === u.id);
@@ -1134,11 +1284,13 @@ export default function ModdableArenaSimulator() {
                       <div className="font-semibold">{u.id}</div>
                       <button className="px-2 py-1 rounded bg-rose-700" onClick={() => setDraftConfig((c) => ({ ...c, unitTypes: c.unitTypes.filter((x) => x.id !== u.id), units: c.units.filter((d) => d.unitTypeId !== u.id) }))}>Remove Unit Template</button>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <label className="text-sm"><div>name</div><input className="w-full bg-slate-700 rounded px-2 py-1" value={u.name} onChange={(e) => updateUnitTypeField(idx, "name", e.target.value)} /></label>
                       <label className="text-sm"><div>color</div><input className="w-full bg-slate-700 rounded px-2 py-1" value={u.color} onChange={(e) => updateUnitTypeField(idx, "color", e.target.value)} /></label>
                       <label className="text-sm"><div>picker</div><input className="w-full h-9 bg-slate-700 rounded px-1 py-1" type="color" value={u.color} onChange={(e) => updateUnitTypeField(idx, "color", e.target.value)} /></label>
                       <label className="text-sm"><div>team</div><input className="w-full bg-slate-700 rounded px-2 py-1" value={deploy?.team || ""} onChange={(e) => updateDeploymentField(u.id, "team", e.target.value)} /></label>
+                      <button className="text-sm px-2 py-1 rounded bg-slate-700 self-end" onClick={() => setPickerMode({ type: "unit", id: u.id })}>Pick unit position on map</button>
+                      <button className="text-sm px-2 py-1 rounded bg-slate-700 self-end" onClick={() => updateDeploymentField(u.id, "active", !(deploy?.active !== false))}>{deploy?.active !== false ? "Send to Storage" : "Deploy to Arena"}</button>
                       {([
                         ["count", deploy?.count ?? 0, (v: number) => updateDeploymentField(u.id, "count", v)],
                         ["HP", u.maxHp, (v: number) => updateUnitTypeField(idx, "maxHp", v)],
@@ -1184,6 +1336,28 @@ export default function ModdableArenaSimulator() {
             </div>
           )}
         </div>
+        {storageOpen && (
+          <div className="fixed inset-0 bg-slate-950/75 flex items-center justify-center z-40 p-4">
+            <div className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-2xl p-4">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold text-lg">Unit Storage</h3>
+                <button className="px-3 py-1 rounded bg-slate-700" onClick={() => setStorageOpen(false)}>Close</button>
+              </div>
+              <div className="space-y-2 max-h-[50vh] overflow-auto">
+                {storedDeployments.length === 0 && <div className="text-slate-400 text-sm">Storage is empty.</div>}
+                {storedDeployments.map((d) => (
+                  <div key={d.id} className="bg-slate-800 rounded-lg p-3 flex items-center justify-between gap-2">
+                    <div className="text-sm">
+                      <div className="font-medium">{d.unitTypeId}</div>
+                      <div className="text-slate-400">{d.team} • count {d.count} • pos ({Math.round(d.x)}, {Math.round(d.y)})</div>
+                    </div>
+                    <button className="px-3 py-1.5 rounded bg-emerald-700" onClick={() => updateDeploymentField(d.unitTypeId, "active", true)}>Deploy</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
