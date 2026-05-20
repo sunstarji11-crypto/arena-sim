@@ -1100,6 +1100,7 @@ export default function ModdableArenaSimulator() {
   const controlInputClass = "w-full bg-[#020f2c] border border-sky-900/70 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/60 focus:border-fuchsia-400/70";
   const controlSelectClass = "w-full bg-[#020f2c] border border-sky-900/70 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/60 focus:border-fuchsia-400/70";
   const fieldLabelClass = "text-[12px] uppercase tracking-wide text-sky-200/85 mb-1";
+  const tabButtonClass = (active: boolean) => `px-4 py-2 rounded-full text-sm font-semibold transition ${active ? "bg-fuchsia-600 text-white shadow shadow-fuchsia-950/40" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`;
 
   const handleArenaPick = (evt: React.MouseEvent<SVGSVGElement>) => {
     if (!pickerMode) return;
@@ -1214,10 +1215,10 @@ export default function ModdableArenaSimulator() {
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-          <div className="flex gap-2 mb-4">
-            <button className={`px-3 py-1.5 rounded ${tab === "units" ? "bg-blue-600" : "bg-slate-800"}`} onClick={() => setTab("units")}>Unit Controls</button>
-            <button className={`px-3 py-1.5 rounded ${tab === "arena" ? "bg-blue-600" : "bg-slate-800"}`} onClick={() => setTab("arena")}>Arena</button>
-            <button className={`px-3 py-1.5 rounded ${tab === "map" ? "bg-blue-600" : "bg-slate-800"}`} onClick={() => setTab("map")}>Map Elements</button>
+          <div className="flex gap-2 mb-4 flex-wrap">
+            <button className={tabButtonClass(tab === "units")} onClick={() => setTab("units")}>Unit Controls</button>
+            <button className={tabButtonClass(tab === "arena")} onClick={() => setTab("arena")}>Arena</button>
+            <button className={tabButtonClass(tab === "map")} onClick={() => setTab("map")}>Map Elements</button>
           </div>
           <p className="text-xs text-slate-400 mb-4">
             {tab === "units" && "Edit unit templates, team deployment, and AI behavior."}
@@ -1229,8 +1230,8 @@ export default function ModdableArenaSimulator() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {(["width", "height", "wallBounce", "friction", "maxSpeed", "timeScale", "roundTimeLimit", "trailLength"] as (keyof ArenaConfig)[]).map((k) => (
                 <label key={k} className="text-sm">
-                  <div className="mb-1 capitalize">{k}</div>
-                  <input className="w-full bg-slate-800 rounded px-2 py-1" type="number" value={String(draftConfig.arena[k] as number)} onChange={(e) => updateArenaField(k, e.target.value)} />
+                  <div className={fieldLabelClass}>{k}</div>
+                  <input className={controlInputClass} type="number" value={String(draftConfig.arena[k] as number)} onChange={(e) => updateArenaField(k, e.target.value)} />
                 </label>
               ))}
             </div>
@@ -1239,21 +1240,21 @@ export default function ModdableArenaSimulator() {
           {tab === "map" && (
             <div className="space-y-3">
               <button
-                className="px-3 py-2 rounded bg-emerald-700"
+                className="px-4 py-2 rounded-full bg-emerald-700 hover:bg-emerald-600 font-semibold"
                 onClick={() => setDraftConfig((c) => ({ ...c, mapElements: [...c.mapElements, { id: `map_${Date.now()}`, type: "wall", x: 100, y: 100, width: 120, height: 80, intensity: 1, color: "#64748b" }] }))}
               >
                 Add Map Element
               </button>
               {draftConfig.mapElements.map((m, idx) => (
-                <div key={m.id} className="bg-slate-800 rounded-xl p-3 grid grid-cols-2 md:grid-cols-9 gap-2 items-end">
-                  <label className="text-sm"><div>Type</div><select className="w-full bg-slate-700 rounded px-2 py-1" value={m.type} onChange={(e) => setDraftConfig((c) => { const mapElements = [...c.mapElements]; mapElements[idx] = { ...mapElements[idx], type: e.target.value as MapElementType }; return { ...c, mapElements }; })}><option value="wall">wall</option><option value="slowZone">slowZone</option><option value="boostZone">boostZone</option><option value="damageZone">damageZone</option><option value="healZone">healZone</option></select></label>
-                  <label className="text-sm"><div>Color</div><input className="w-full bg-slate-700 rounded px-2 py-1" value={m.color} onChange={(e) => setDraftConfig((c) => { const mapElements = [...c.mapElements]; mapElements[idx] = { ...mapElements[idx], color: e.target.value }; return { ...c, mapElements }; })} /></label>
-                  <label className="text-sm"><div>Picker</div><input className="w-full h-9 bg-slate-700 rounded px-1 py-1" type="color" value={m.color} onChange={(e) => setDraftConfig((c) => { const mapElements = [...c.mapElements]; mapElements[idx] = { ...mapElements[idx], color: e.target.value }; return { ...c, mapElements }; })} /></label>
+                <div key={m.id} className="bg-[#011133] border border-sky-900/55 rounded-2xl p-3 grid grid-cols-2 md:grid-cols-9 gap-3 items-end">
+                  <label className="text-sm"><div className={fieldLabelClass}>Type</div><select className={controlSelectClass} value={m.type} onChange={(e) => setDraftConfig((c) => { const mapElements = [...c.mapElements]; mapElements[idx] = { ...mapElements[idx], type: e.target.value as MapElementType }; return { ...c, mapElements }; })}><option value="wall">wall</option><option value="slowZone">slowZone</option><option value="boostZone">boostZone</option><option value="damageZone">damageZone</option><option value="healZone">healZone</option></select></label>
+                  <label className="text-sm"><div className={fieldLabelClass}>Color</div><input className={controlInputClass} value={m.color} onChange={(e) => setDraftConfig((c) => { const mapElements = [...c.mapElements]; mapElements[idx] = { ...mapElements[idx], color: e.target.value }; return { ...c, mapElements }; })} /></label>
+                  <label className="text-sm"><div className={fieldLabelClass}>Picker</div><input className="w-full h-11 bg-[#020f2c] border border-sky-900/70 rounded-xl px-1.5 py-1.5" type="color" value={m.color} onChange={(e) => setDraftConfig((c) => { const mapElements = [...c.mapElements]; mapElements[idx] = { ...mapElements[idx], color: e.target.value }; return { ...c, mapElements }; })} /></label>
                   {(["x", "y", "width", "height", "intensity"] as const).map((k) => (
-                    <label key={k} className="text-sm"><div>{k}</div><input className="w-full bg-slate-700 rounded px-2 py-1" type="number" value={m[k]} onChange={(e) => setDraftConfig((c) => { const mapElements = [...c.mapElements]; mapElements[idx] = { ...mapElements[idx], [k]: Number(e.target.value) || 0 }; return { ...c, mapElements }; })} /></label>
+                    <label key={k} className="text-sm"><div className={fieldLabelClass}>{k}</div><input className={controlInputClass} type="number" value={m[k]} onChange={(e) => setDraftConfig((c) => { const mapElements = [...c.mapElements]; mapElements[idx] = { ...mapElements[idx], [k]: Number(e.target.value) || 0 }; return { ...c, mapElements }; })} /></label>
                   ))}
-                  <button className="px-3 py-1.5 rounded bg-slate-700" onClick={() => setPickerMode({ type: "map", id: m.id })}>Pick on map</button>
-                  <button className="px-3 py-1.5 rounded bg-rose-700" onClick={() => setDraftConfig((c) => ({ ...c, mapElements: c.mapElements.filter((_, i) => i !== idx) }))}>Remove</button>
+                  <button className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-600 hover:bg-slate-700" onClick={() => setPickerMode({ type: "map", id: m.id })}>Pick on map</button>
+                  <button className="px-3 py-2 rounded-xl bg-rose-700 hover:bg-rose-600" onClick={() => setDraftConfig((c) => ({ ...c, mapElements: c.mapElements.filter((_, i) => i !== idx) }))}>Remove</button>
                 </div>
               ))}
             </div>
