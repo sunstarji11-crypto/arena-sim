@@ -469,17 +469,17 @@ function scoreCandidateDirection(unit: RuntimeUnit, target: RuntimeUnit | null, 
   const speed = unitType.moveSpeed * unit.buffs.speedMult;
   const predict = { x: unit.x + n.x * speed * 0.35, y: unit.y + n.y * speed * 0.35 };
   let score = 0;
-  if (predict.x < 0 || predict.x > arena.width || predict.y < 0 || predict.y > arena.height) score -= 500;
+  if (predict.x < 0 || predict.x > arena.width || predict.y < 0 || predict.y > arena.height) score -= 320;
 
   const wall = mapElements.find((m) => m.type === "wall" && pointInRect(predict, m));
-  if (wall) score -= 1000;
+  if (wall) score -= 650;
 
   for (const m of mapElements) {
     const inside = pointInRect(predict, m);
     if (!inside) continue;
-    if (m.type === "slowZone") score -= unitType.ai.behavior === "kite" ? 120 : 55;
+    if (m.type === "slowZone") score -= unitType.ai.behavior === "kite" ? 85 : 35;
     if (m.type === "boostZone") score += unitType.ai.behavior === "aggressive" || unitType.ai.behavior === "opportunist" ? 110 : 35;
-    if (m.type === "damageZone") score -= unitType.ai.behavior === "opportunist" || unitType.ai.behavior === "kite" ? 280 : 140;
+    if (m.type === "damageZone") score -= unitType.ai.behavior === "opportunist" || unitType.ai.behavior === "kite" ? 220 : 110;
     if (m.type === "healZone") score += (1 - getHealthRatio(unit)) * (unitType.ai.behavior === "opportunist" ? 260 : 180);
   }
 
@@ -508,12 +508,12 @@ function scoreCandidateDirection(unit: RuntimeUnit, target: RuntimeUnit | null, 
     }
 
     const blocking = findBlockingWall(unit, target, mapElements);
-    if (blocking && unitType.ai.behavior !== "aggressive") score -= 70;
+    if (blocking && unitType.ai.behavior !== "aggressive") score -= 38;
   } else {
     const heal = nearestElementByType(unit, mapElements, "healZone");
     if (heal && getHealthRatio(unit) < 0.55) {
       const dc = distance(predict, rectCenter(heal));
-      score += (700 - dc) * 0.2;
+      score += (700 - dc) * 0.16;
     }
   }
 
@@ -541,8 +541,8 @@ function chooseSmartDirection(unit: RuntimeUnit, target: RuntimeUnit | null, sta
     left,
     right,
     inertia,
-    { x: toTarget.x + left.x * 0.6, y: toTarget.y + left.y * 0.6 },
-    { x: toTarget.x + right.x * 0.6, y: toTarget.y + right.y * 0.6 },
+    { x: toTarget.x + left.x * 0.75, y: toTarget.y + left.y * 0.75 },
+    { x: toTarget.x + right.x * 0.75, y: toTarget.y + right.y * 0.75 },
   ];
 
   if (unitType.ai.behavior === "opportunist") {
@@ -760,7 +760,7 @@ function updateSimulation(prev: SimulationState, dtRaw: number): SimulationState
 
     const target = chooseTarget(unit, state, unitType);
     const dir = chooseSmartDirection(unit, target, state, unitType);
-    const accel = unitType.moveSpeed * unit.buffs.speedMult * (0.8 + 0.4 * unitType.ai.bravery);
+    const accel = unitType.moveSpeed * unit.buffs.speedMult * (1.05 + 0.5 * unitType.ai.bravery);
     unit.vx += dir.x * accel * dt;
     unit.vy += dir.y * accel * dt;
 
